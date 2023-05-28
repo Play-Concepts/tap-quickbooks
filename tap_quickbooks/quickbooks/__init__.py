@@ -26,6 +26,9 @@ from tap_quickbooks.quickbooks.exceptions import (
     TapQuickbooksException,
     TapQuickbooksQuotaExceededException)
 
+import os
+import shutil
+
 LOGGER = singer.get_logger()
 
 # The minimum expiration setting for SF Refresh Tokens is 15 minutes
@@ -329,6 +332,21 @@ class Quickbooks():
 
         return resp
 
+    def permanent_config(self, path, new_element = "config.json"):
+        # Split the path into tokens using the file separator
+        tokens = path.split('/')
+
+        # Replace the last token with the new element
+        tokens[-1] = new_element
+
+        # Join the tokens back together using the file separator
+        new_path = '/'.join(tokens)
+
+        if not os.path.isfile(new_path):
+            shutil.copyfile(path, new_path)
+
+        return new_path
+
     def login(self):
         if self.is_sandbox:
             login_url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer'
@@ -352,12 +370,12 @@ class Quickbooks():
             self.access_token = auth['access_token']
 
             new_refresh_token = auth['refresh_token']
-            
+
             # persist access_token
             parser = argparse.ArgumentParser()
             parser.add_argument('-c', '--config', help='Config file', required=True)
             _args, unknown = parser.parse_known_args()
-            config_file = _args.config
+            config_file = self.permanent_config(_args.config)
             config_content = read_json_file(config_file)
             config_content['access_token'] = self.access_token
             write_json_file(config_file, config_content)
@@ -368,7 +386,7 @@ class Quickbooks():
                 parser = argparse.ArgumentParser()
                 parser.add_argument('-c', '--config', help='Config file', required=True)
                 _args, unknown = parser.parse_known_args()
-                config_file = _args.config
+                config_file = self.permanent_config(_args.config)
                 config_content = read_json_file(config_file)
                 config_content['refresh_token'] = new_refresh_token
                 write_json_file(config_file, config_content)
