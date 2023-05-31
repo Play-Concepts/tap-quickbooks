@@ -347,14 +347,24 @@ class Quickbooks():
 
         return new_path
 
+    def get_config(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-c', '--config', help='Config file', required=True)
+        _args, unknown = parser.parse_known_args()
+        config_file = self.permanent_config(_args.config)
+        config_content = read_json_file(config_file)
+        return config_file, config_content
+
     def login(self):
         if self.is_sandbox:
             login_url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer'
         else:
             login_url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer'
 
-        login_body = {'grant_type': 'refresh_token', 'client_id': self.qb_client_id,
-                      'client_secret': self.qb_client_secret, 'refresh_token': self.refresh_token}
+        config_file, config_content = self.get_config()
+
+        login_body = {'grant_type': 'refresh_token', 'client_id': config_content["client_id"],
+                      'client_secret': config_content["client_secret"], 'refresh_token': config_content["refresh_token"]}
 
         LOGGER.info("Attempting login via OAuth2")
 
@@ -372,22 +382,13 @@ class Quickbooks():
             new_refresh_token = auth['refresh_token']
 
             # persist access_token
-            parser = argparse.ArgumentParser()
-            parser.add_argument('-c', '--config', help='Config file', required=True)
-            _args, unknown = parser.parse_known_args()
-            config_file = self.permanent_config(_args.config)
-            config_content = read_json_file(config_file)
             config_content['access_token'] = self.access_token
             write_json_file(config_file, config_content)
 
             # Check if the refresh token is update, if so update the config file with new refresh token.
             if new_refresh_token != self.refresh_token:
                 LOGGER.info(f"Old refresh token [{self.refresh_token}] expired.")
-                parser = argparse.ArgumentParser()
-                parser.add_argument('-c', '--config', help='Config file', required=True)
-                _args, unknown = parser.parse_known_args()
-                config_file = self.permanent_config(_args.config)
-                config_content = read_json_file(config_file)
+                config_file, config_content = self.get_config()
                 config_content['refresh_token'] = new_refresh_token
                 write_json_file(config_file, config_content)
 
